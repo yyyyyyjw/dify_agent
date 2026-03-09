@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # 数据库服务
+  db:
+    image: postgres:15-alpine
+    container_name: dify_agent_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-your_password}
+      POSTGRES_DB: ${POSTGRES_DB:-dify_agent}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/db:/var/lib/postgresql/data
+
+  # 后端服务
+  backend:
+    build: ./backend
+    container_name: dify_agent_backend
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-your_password}@db:5432/${POSTGRES_DB:-dify_agent}
+      - SECRET_KEY=${SECRET_KEY:-your_secret_key_here}
+      - DIFY_API_KEY=${DIFY_API_KEY}
+      - DIFY_API_URL=${DIFY_API_URL}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    volumes:
+      - ./data/uploads:/app/uploads
+    networks:
+      - default
+      - dify_network
+
+  # 前端服务
+  frontend:
+    build: ./frontend
+    container_name: dify_agent_frontend
+    restart: always
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+networks:
+  dify_network:
+    external: true
+    name: docker_default
+
+volumes:
+  postgres_data:
