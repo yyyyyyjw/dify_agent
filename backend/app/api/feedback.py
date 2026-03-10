@@ -4,7 +4,7 @@ from typing import Optional
 from app.db.session import get_db
 from app.api.auth import get_current_user
 from app.models.models import User, Message, Conversation
-from app.schemas.feedback import Feedback, FeedbackCreate, DailyProgress
+from app.schemas.feedback import Feedback, FeedbackCreate
 from app.crud import feedback as feedback_crud
 from app.crud import chat as chat_crud
 
@@ -34,17 +34,6 @@ def create_message_feedback(
         raise HTTPException(status_code=400, detail="Can only rate assistant messages")
 
     return feedback_crud.create_feedback(db, feedback_in=feedback_in)
-
-@router.get("/daily-progress", response_model=DailyProgress)
-def get_daily_progress(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    获取当前用户今日评价完成数量（每日目标 2 条）
-    """
-    completed = feedback_crud.get_today_feedback_count(db, user_id=current_user.id)
-    return DailyProgress(completed=completed, goal=current_user.daily_goal)
 
 @router.get("/{message_id}", response_model=Optional[Feedback])
 def get_message_feedback(

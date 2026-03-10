@@ -7,9 +7,13 @@ from app.core.config import settings
 SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
 
 # 创建引擎
-# 如果是 SQLite，需要 check_same_thread=False
+# pool_pre_ping：每次取出连接前检测是否仍然有效，避免因 PostgreSQL 超时回收导致的 "connection closed" 错误
+# pool_size/max_overflow：4 个 gunicorn worker × 5 个连接 = 最多 20 个长连接
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL
+    SQLALCHEMY_DATABASE_URL,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
 )
 
 # 会话工厂
