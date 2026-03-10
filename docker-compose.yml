@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # 数据库服务
+  # 数据库服务（不对外暴露端口，仅容器内部通信）
   db:
     image: postgres:15-alpine
     container_name: dify_agent_db
@@ -10,12 +10,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-your_password}
       POSTGRES_DB: ${POSTGRES_DB:-dify_agent}
-    ports:
-      - "5432:5432"
     volumes:
       - ./data/db:/var/lib/postgresql/data
 
-  # 后端服务
+  # 后端服务（不对外暴露端口，由前端 Next.js 服务端代理转发）
   backend:
     build: ./backend
     container_name: dify_agent_backend
@@ -25,8 +23,6 @@ services:
       - SECRET_KEY=${SECRET_KEY:-your_secret_key_here}
       - DIFY_API_KEY=${DIFY_API_KEY}
       - DIFY_API_URL=${DIFY_API_URL}
-    ports:
-      - "8000:8000"
     depends_on:
       - db
     volumes:
@@ -35,15 +31,19 @@ services:
       - default
       - dify_network
 
-  # 前端服务
+  # 前端服务（唯一对外暴露的入口）
   frontend:
     build: ./frontend
     container_name: dify_agent_frontend
     restart: always
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      # 留空：浏览器发相对路径请求，由 next.config.ts rewrites 在服务端转发给 backend 容器
+      - NEXT_PUBLIC_API_URL=
+      # 服务端（Route Handler / rewrites）访问后端容器的地址
+      - BACKEND_URL=http://backend:8000
     ports:
-      - "3000:3000"
+      # 将 YOUR_LAN_IP 替换为你的内网 IP（运行 ipconfig 查看，例如 192.168.1.100）
+      - "192.168.101.133:3000:3000"
     depends_on:
       - backend
 

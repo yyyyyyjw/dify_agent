@@ -37,6 +37,8 @@ app = FastAPI(title="Dify Agent API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
+    # 允许局域网 192.168.x.x 的所有设备通过浏览器访问前端后再请求后端
+    allow_origin_regex=r"http://192\.168\.\d+\.\d+(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

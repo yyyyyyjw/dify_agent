@@ -30,6 +30,7 @@ import {
   Crown,
   Users,
   TrendingUp,
+  RefreshCw,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -503,9 +504,11 @@ function UserHeatmapCard({
 function HeatmapView({
   onResetPassword,
   onSetMembership,
+  refreshKey,
 }: {
   onResetPassword?: (userId: number, username: string) => void;
   onSetMembership?: (userId: number, username: string, current: string) => void;
+  refreshKey?: number;
 }) {
   const now = new Date(Date.now() + CST_OFFSET);
   const [year, setYear] = useState(now.getUTCFullYear());
@@ -527,7 +530,7 @@ function HeatmapView({
     }
   }, []);
 
-  useEffect(() => { load(year, month); }, [year, month, load]);
+  useEffect(() => { load(year, month); }, [year, month, load, refreshKey]);
 
   const prevMonth = () => { if (month === 1) { setYear(y => y - 1); setMonth(12); } else setMonth(m => m - 1); };
   const nextMonth = () => { if (month === 12) { setYear(y => y + 1); setMonth(1); } else setMonth(m => m + 1); };
@@ -578,9 +581,11 @@ function HeatmapView({
 function DateQueryView({
   onSetMembership,
   onResetPassword,
+  refreshKey,
 }: {
   onSetMembership?: (userId: number, username: string, current: string) => void;
   onResetPassword?: (userId: number, username: string) => void;
+  refreshKey?: number;
 }) {
   const [date, setDate] = useState(todayString());
   const [data, setData] = useState<UserDayQueryDetail[]>([]);
@@ -601,7 +606,7 @@ function DateQueryView({
     }
   }, []);
 
-  useEffect(() => { load(date); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(date); }, [refreshKey]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = (uid: number) => {
     setExpandedUsers(prev => {
@@ -755,9 +760,11 @@ function DateQueryView({
 function LeaderboardView({
   onSetMembership,
   onResetPassword,
+  refreshKey,
 }: {
   onSetMembership?: (userId: number, username: string, current: string) => void;
   onResetPassword?: (userId: number, username: string) => void;
+  refreshKey?: number;
 }) {
   const [data, setData] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -778,7 +785,7 @@ function LeaderboardView({
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, refreshKey]);
 
   const filtered = data.filter(e => {
     const matchSearch = !search.trim() || e.username.toLowerCase().includes(search.trim().toLowerCase()) || e.email.toLowerCase().includes(search.trim().toLowerCase());
@@ -925,6 +932,7 @@ export default function AdminPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'messages' | 'stats'>('messages');
   const [statsView, setStatsView] = useState<'date' | 'heatmap' | 'leaderboard'>('date');
+  const [statsRefreshKey, setStatsRefreshKey] = useState(0);
 
   // Messages tab state
   const [conversations, setConversations] = useState<AdminConversation[]>([]);
@@ -1131,16 +1139,18 @@ export default function AdminPage() {
         {/* Main Tabs */}
         <div className="flex gap-1 mb-6 bg-white border border-gray-200 rounded-xl p-1 w-fit shadow-sm">
           <button
-            onClick={() => setActiveTab('messages')}
+            onClick={() => { setActiveTab('messages'); loadConversations(appliedMin, appliedMax); }}
             className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${
               activeTab === 'messages' ? 'bg-blue-600 text-white shadow' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
             }`}
           >
-            <MessageSquare size={15} />
+            {msgLoading && activeTab === 'messages'
+              ? <RefreshCw size={15} className="animate-spin" />
+              : <MessageSquare size={15} />}
             消息管理
           </button>
           <button
-            onClick={() => setActiveTab('stats')}
+            onClick={() => { setActiveTab('stats'); setStatsRefreshKey(k => k + 1); }}
             className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${
               activeTab === 'stats' ? 'bg-blue-600 text-white shadow' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
             }`}
@@ -1287,13 +1297,13 @@ export default function AdminPage() {
             </div>
 
             {statsView === 'date' && (
-              <DateQueryView onSetMembership={openMemberModal} onResetPassword={openResetModal} />
+              <DateQueryView onSetMembership={openMemberModal} onResetPassword={openResetModal} refreshKey={statsRefreshKey} />
             )}
             {statsView === 'heatmap' && (
-              <HeatmapView onSetMembership={openMemberModal} onResetPassword={openResetModal} />
+              <HeatmapView onSetMembership={openMemberModal} onResetPassword={openResetModal} refreshKey={statsRefreshKey} />
             )}
             {statsView === 'leaderboard' && (
-              <LeaderboardView onSetMembership={openMemberModal} onResetPassword={openResetModal} />
+              <LeaderboardView onSetMembership={openMemberModal} onResetPassword={openResetModal} refreshKey={statsRefreshKey} />
             )}
           </div>
         )}

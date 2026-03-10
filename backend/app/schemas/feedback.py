@@ -2,9 +2,6 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 
-class DailyProgress(BaseModel):
-    completed: int
-    goal: int
 
 class FeedbackBase(BaseModel):
     rating: int = Field(..., ge=1, le=10, description="评分，1-10分")

@@ -81,15 +81,26 @@ async def chat(
                     chat_crud.update_message_dify_id(stream_db, user_msg_id, dify_message_id)
 
                 if event in ("message", "agent_message"):
-                    # 流式文本块
+                    # 流式文本块（基础 LLM / Agent 应用）
                     text = chunk.get("answer", "")
                     full_answer += text
                     new_dify_conv_id = chunk.get("conversation_id") or new_dify_conv_id
                     yield f"data: {json.dumps(chunk)}\n\n"
 
+                elif event == "text_chunk":
+                    # 流式文本块（Chatflow / Workflow 应用）
+                    text = chunk.get("data", {}).get("text", "")
+                    full_answer += text
+                    yield f"data: {json.dumps(chunk)}\n\n"
+
                 elif event in ("message_end", "workflow_finished"):
                     # 流结束，保存 AI 完整回答到数据库
                     new_dify_conv_id = chunk.get("conversation_id") or new_dify_conv_id
+
+                    # chatflow 通过 text_chunk 累积；基础 LLM 通过 message 累积
+                    # message_end 的 answer 字段作为兜底（部分 Dify 版本携带）
+                    if not full_answer:
+                        full_answer = chunk.get("answer", "")
 
                     chat_crud.create_message(
                         stream_db,
@@ -118,7 +129,15 @@ async def chat(
         finally:
             stream_db.close()
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.get("/conversations", response_model=list[Conversation])

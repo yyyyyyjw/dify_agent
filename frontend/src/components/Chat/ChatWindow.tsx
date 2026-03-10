@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Plus, History, LogOut, User, MessageSquare, Target, AlertCircle, X, KeyRound, Eye, EyeOff } from 'lucide-react';
+import { Send, Plus, History, LogOut, User, MessageSquare, AlertCircle, X, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { fetchSSE } from '@/lib/api';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -85,9 +85,6 @@ const ChatWindow = () => {
 
   // 用户不在查看时已完成的对话 ID，用于侧边栏小圆点提示
   const [pendingConvIds, setPendingConvIds] = useState<Set<number>>(new Set());
-
-  // 每日评价目标进度
-  const [dailyProgress, setDailyProgress] = useState<{ completed: number; goal: number } | null>(null);
 
   // 本地提问计数器：每次 AI 响应完成立刻 +1，实现等级变化零延迟
   const [localQuestionCount, setLocalQuestionCount] = useState<number>(0);
@@ -192,18 +189,8 @@ const ChatWindow = () => {
 
   useEffect(() => {
     fetchConversations();
-    fetchDailyProgress();
     refreshUser();
   }, []);
-
-  const fetchDailyProgress = async () => {
-    try {
-      const response = await api.get('/feedback/daily-progress');
-      setDailyProgress(response.data);
-    } catch (error) {
-      // console.error('Failed to fetch daily progress', error);
-    }
-  };
 
   const fetchMe = async () => {
     try {
@@ -311,9 +298,28 @@ const ChatWindow = () => {
             }
 
           } else if (data.event === 'message' || data.event === 'agent_message') {
-            assistantContent += data.answer;
+            // 基础 LLM / Agent 应用的流式文本块
+            assistantContent += data.answer ?? '';
 
-            // 只在用户正在查看这个对话时才更新显示
+            if (currentConversationIdRef.current === activeConversationId) {
+              setMessages(prev => {
+                const last = prev[prev.length - 1];
+                if (last?.role === 'assistant') {
+                  return [...prev.slice(0, -1), { ...last, content: assistantContent }];
+                }
+                return [...prev, {
+                  id: assistantMessageId,
+                  role: 'assistant',
+                  content: assistantContent,
+                  created_at: new Date().toISOString(),
+                }];
+              });
+            }
+
+          } else if (data.event === 'text_chunk') {
+            // Chatflow / Workflow 应用的流式文本块
+            assistantContent += data.data?.text ?? '';
+
             if (currentConversationIdRef.current === activeConversationId) {
               setMessages(prev => {
                 const last = prev[prev.length - 1];
@@ -458,13 +464,6 @@ const ChatWindow = () => {
             })}
           </div>
         </div>
-
-        {/* Daily Goal Progress */}
-        {dailyProgress && (
-          <div className="px-3 py-3 border-t border-gray-100">
-            <DailyGoalCard completed={dailyProgress.completed} goal={dailyProgress.goal} />
-          </div>
-        )}
 
         {/* Membership Level Progress */}
         {user && !user.is_admin && (
@@ -682,7 +681,7 @@ const ChatWindow = () => {
                     messageId={msg.id}
                     initialRating={msg.feedback?.rating}
                     initialComment={msg.feedback?.comment}
-                    onSubmitted={fetchDailyProgress}
+                    onSubmitted={() => {}}
                   />
                 )}
               </div>
@@ -737,105 +736,6 @@ const ChatWindow = () => {
     </div>
   );
 };
-
-const DAILY_HINTS = [
-  { max: 0, text: '今天还没有评价，快去聊一聊吧！' },
-  { max: 1, text: '已完成 1 个，再来 1 个就达成目标！' },
-  { max: 2, text: '今日目标达成，明天继续加油！' },
-  { max: Infinity, text: '超额完成，你今天真棒！' },
-];
-
-const CONFETTI_PARTICLES = [
-  { color: '#4ade80', left: '8%',  delay: '0ms',   size: 4 },
-  { color: '#60a5fa', left: '22%', delay: '60ms',  size: 3 },
-  { color: '#fbbf24', left: '38%', delay: '20ms',  size: 4 },
-  { color: '#a78bfa', left: '52%', delay: '80ms',  size: 3 },
-  { color: '#34d399', left: '66%', delay: '40ms',  size: 4 },
-  { color: '#f472b6', left: '80%', delay: '100ms', size: 3 },
-  { color: '#60a5fa', left: '92%', delay: '10ms',  size: 4 },
-];
-
-function DailyGoalCard({ completed, goal }: { completed: number; goal: number }) {
-  const pct = Math.min((completed / goal) * 100, 100);
-  const isDone = completed >= goal;
-  const hint = DAILY_HINTS.find(h => completed <= h.max)?.text ?? DAILY_HINTS[DAILY_HINTS.length - 1].text;
-
-  const [showConfetti, setShowConfetti] = useState(false);
-  const prevDoneRef = useRef(false);
-
-  useEffect(() => {
-    if (isDone && !prevDoneRef.current) {
-      setShowConfetti(true);
-      const t = setTimeout(() => setShowConfetti(false), 1200);
-      prevDoneRef.current = true;
-      return () => clearTimeout(t);
-    }
-    if (!isDone) prevDoneRef.current = false;
-  }, [isDone]);
-
-  return (
-    <div className={cn(
-      "relative rounded-xl p-3 space-y-2.5 border transition-colors overflow-hidden",
-      isDone
-        ? "bg-green-50 border-green-100"
-        : "bg-blue-50/60 border-blue-100/80"
-    )}>
-      <style>{`
-        @keyframes confetti-rise {
-          0%   { transform: translateY(0)   scale(1);   opacity: 1; }
-          80%  { opacity: 0.6; }
-          100% { transform: translateY(-52px) scale(0.4); opacity: 0; }
-        }
-      `}</style>
-
-      {/* 彩带粒子 */}
-      {showConfetti && CONFETTI_PARTICLES.map((p, i) => (
-        <span
-          key={i}
-          style={{
-            position: 'absolute',
-            bottom: '6px',
-            left: p.left,
-            width: p.size,
-            height: p.size * 2.2,
-            borderRadius: '1px',
-            background: p.color,
-            opacity: 0,
-            animation: `confetti-rise 900ms ${p.delay} ease-out forwards`,
-            pointerEvents: 'none',
-          }}
-        />
-      ))}
-
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <Target size={13} className={isDone ? "text-green-600" : "text-blue-500"} />
-          <span className={cn("text-[11px] font-semibold tracking-wide", isDone ? "text-green-700" : "text-blue-700")}>
-            今日目标
-          </span>
-        </div>
-        <span className={cn("text-xs font-bold tabular-nums", isDone ? "text-green-600" : "text-blue-600")}>
-          {completed} / {goal}
-        </span>
-      </div>
-
-      {/* 进度条 */}
-      <div className="h-1.5 bg-white/70 rounded-full overflow-hidden">
-        <div
-          className={cn(
-            "h-full rounded-full transition-all duration-500",
-            isDone ? "bg-green-500" : "bg-blue-500"
-          )}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-
-      <p className={cn("text-[11px] leading-relaxed", isDone ? "text-green-600" : "text-blue-500/90")}>
-        {hint}
-      </p>
-    </div>
-  );
-}
 
 const LEVEL_THRESHOLDS = [
   { level: 'free',    min: 0,   label: '普通', icon: '○',  color: 'text-gray-500',   bg: 'bg-gray-400',   tagBg: 'bg-gray-100',    tagText: 'text-gray-500'   },

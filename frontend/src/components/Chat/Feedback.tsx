@@ -32,7 +32,7 @@ const Feedback: React.FC<FeedbackProps> = ({ messageId, initialRating = 0, initi
     if (!rating) return;
     setIsSubmitting(true);
     try {
-      await api.post('/feedback/', {
+      await api.post('/feedback', {
         message_id: messageId,
         rating: rating,
         comment: comment,
