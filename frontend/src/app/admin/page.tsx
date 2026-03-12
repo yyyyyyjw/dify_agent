@@ -6,6 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import {
   MessageSquare,
   ChevronDown,
@@ -181,10 +182,27 @@ function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(text).then(() => {
+    const doFallback = () => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    });
+    };
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }).catch(doFallback);
+    } else {
+      doFallback();
+    }
   };
   return (
     <button
@@ -295,7 +313,7 @@ function ConversationCard({ conv, filterMin, filterMax, showUnratedOnly }: {
                       ) : (
                         <div className="text-sm text-gray-700 leading-relaxed prose prose-sm max-w-none prose-p:my-0.5 prose-headings:mt-2 prose-headings:mb-0.5 prose-ul:my-0.5 prose-ol:my-0.5 prose-li:my-0 prose-pre:my-1 prose-blockquote:my-1 prose-hr:my-1.5">
                           <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
+                            remarkPlugins={[remarkGfm, remarkBreaks]}
                             components={{
                               code({ className, children, ...props }) {
                                 const isBlock = className?.includes('language-');

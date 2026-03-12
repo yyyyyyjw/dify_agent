@@ -60,6 +60,7 @@ async def chat(
         dify_message_id = None
         new_dify_conv_id = None
         user_msg_id = db_user_msg.id
+        ai_message_saved = False
 
         # 先把本地 conversation_id 告知前端，让前端能正确关联后续消息
         yield f"data: {json.dumps({'event': 'conversation_created', 'conversation_id': conversation_id})}\n\n"
@@ -94,33 +95,37 @@ async def chat(
                     yield f"data: {json.dumps(chunk)}\n\n"
 
                 elif event in ("message_end", "workflow_finished"):
-                    # 流结束，保存 AI 完整回答到数据库
                     new_dify_conv_id = chunk.get("conversation_id") or new_dify_conv_id
 
-                    # chatflow 通过 text_chunk 累积；基础 LLM 通过 message 累积
-                    # message_end 的 answer 字段作为兜底（部分 Dify 版本携带）
-                    if not full_answer:
-                        full_answer = chunk.get("answer", "")
+                    # Dify Chatflow 应用会同时触发 message_end 和 workflow_finished 两个事件，
+                    # 用 ai_message_saved 标志防止重复写入数据库
+                    if not ai_message_saved:
+                        ai_message_saved = True
 
-                    chat_crud.create_message(
-                        stream_db,
-                        message_in=chat_crud.MessageCreate(
-                            conversation_id=conversation_id,
-                            role="assistant",
-                            content=full_answer,
-                            dify_message_id=dify_message_id
+                        # chatflow 通过 text_chunk 累积；基础 LLM 通过 message 累积
+                        # message_end 的 answer 字段作为兜底（部分 Dify 版本携带）
+                        if not full_answer:
+                            full_answer = chunk.get("answer", "")
+
+                        chat_crud.create_message(
+                            stream_db,
+                            message_in=chat_crud.MessageCreate(
+                                conversation_id=conversation_id,
+                                role="assistant",
+                                content=full_answer,
+                                dify_message_id=dify_message_id
+                            )
                         )
-                    )
 
-                    # 检查并更新用户等级（用 stream_db 重新加载 user，避免 DetachedInstanceError）
-                    from app.crud import user as user_crud
-                    fresh_user = stream_db.query(User).filter(User.id == current_user.id).first()
-                    if fresh_user:
-                        user_crud.update_user_membership_by_questions(stream_db, fresh_user)
+                        # 检查并更新用户等级（用 stream_db 重新加载 user，避免 DetachedInstanceError）
+                        from app.crud import user as user_crud
+                        fresh_user = stream_db.query(User).filter(User.id == current_user.id).first()
+                        if fresh_user:
+                            user_crud.update_user_membership_by_questions(stream_db, fresh_user)
 
-                    # 如果是新对话，把 Dify 返回的 conversation_id 存起来
-                    if new_dify_conv_id and not dify_conv_id:
-                        chat_crud.update_conversation_dify_id(stream_db, conversation_id, new_dify_conv_id)
+                        # 如果是新对话，把 Dify 返回的 conversation_id 存起来
+                        if new_dify_conv_id and not dify_conv_id:
+                            chat_crud.update_conversation_dify_id(stream_db, conversation_id, new_dify_conv_id)
 
                     yield f"data: {json.dumps(chunk)}\n\n"
 

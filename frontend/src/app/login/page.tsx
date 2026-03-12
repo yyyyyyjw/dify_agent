@@ -57,14 +57,14 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-gray-700">用户名</label>
+              <label className="text-sm font-medium text-gray-700">用户名或邮箱</label>
               <input
                 type="text"
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-gray-400"
-                placeholder="请输入用户名"
+                placeholder="请输入用户名或邮箱"
               />
             </div>
 

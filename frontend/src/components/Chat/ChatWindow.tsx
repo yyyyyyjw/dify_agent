@@ -10,6 +10,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -269,6 +270,7 @@ const ChatWindow = () => {
     let assistantMessageId = Date.now() + 1;
     let assistantContent = '';
     let activeConversationId: number | null = sendingConvId;
+    let endEventHandled = false;
 
     try {
       await fetchSSE('/chat/chat',
@@ -336,19 +338,23 @@ const ChatWindow = () => {
             }
 
           } else if (data.event === 'message_end' || data.event === 'workflow_finished') {
-            // 本地计数立即 +1，同时判断是否升级（纯同步，无 effect 竞态）
-            setLocalQuestionCount(prev => {
-              const next = prev + 1;
-              const oldIdx = LEVEL_THRESHOLDS.reduce((acc, t, i) => prev >= t.min ? i : acc, 0);
-              const newIdx = LEVEL_THRESHOLDS.reduce((acc, t, i) => next >= t.min ? i : acc, 0);
-              if (newIdx > oldIdx) {
-                setShowLevelUp(true);
-                setTimeout(() => setShowLevelUp(false), 5000);
-              }
-              return next;
-            });
-            fetchConversations();
-            refreshUser();
+            // Dify Chatflow 会同时发 message_end 和 workflow_finished，用标志位只处理一次
+            if (!endEventHandled) {
+              endEventHandled = true;
+              // 本地计数立即 +1，同时判断是否升级（纯同步，无 effect 竞态）
+              setLocalQuestionCount(prev => {
+                const next = prev + 1;
+                const oldIdx = LEVEL_THRESHOLDS.reduce((acc, t, i) => prev >= t.min ? i : acc, 0);
+                const newIdx = LEVEL_THRESHOLDS.reduce((acc, t, i) => next >= t.min ? i : acc, 0);
+                if (newIdx > oldIdx) {
+                  setShowLevelUp(true);
+                  setTimeout(() => setShowLevelUp(false), 5000);
+                }
+                return next;
+              });
+              fetchConversations();
+              refreshUser();
+            }
           }
         }
       );
@@ -650,7 +656,7 @@ const ChatWindow = () => {
                 )}>
                   {msg.role === 'user' ? msg.content : (
                     <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
+                      remarkPlugins={[remarkGfm, remarkBreaks]}
                       components={{
                         code({ className, children, ...props }) {
                           const isBlock = className?.includes('language-');
