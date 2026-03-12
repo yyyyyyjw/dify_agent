@@ -42,8 +42,7 @@ services:
       # 服务端（Route Handler / rewrites）访问后端容器的地址
       - BACKEND_URL=http://backend:8000
     ports:
-      # 将 YOUR_LAN_IP 替换为你的内网 IP（运行 ipconfig 查看，例如 192.168.1.100）
-      - "192.168.101.133:3000:3000"
+      - "${HOST_IP:-0.0.0.0}:3000:3000"
     depends_on:
       - backend
 

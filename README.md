@@ -1,4 +1,5 @@
 *** 该分支上的配置支持通过局域网访问 ***
+*** 请在.env里配置HOST_IP= YOUR_LAN_IP ***
 # Dify Agent 前后端分离系统
 
 这是一个集成了 Dify 工作流 API 的全栈应用，包含 FastAPI 后端和 React 前端。支持用户管理、流式对话持久化及评分反馈功能。
